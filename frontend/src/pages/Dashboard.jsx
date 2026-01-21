@@ -16,6 +16,16 @@ function prettyDate(dateStr) {
   return d.toLocaleDateString();
 }
 
+function toDateInputValue(dateStr) {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export default function Dashboard() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +35,23 @@ export default function Dashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+  // Edit modal state
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [editErr, setEditErr] = useState("");
+
+  // Your existing endpoint config
   const JOBS_LIST_PATH = import.meta.env.VITE_JOBS_LIST_PATH || "/jobs/";
+
+  // ✅ We assume a standard REST endpoint: PATCH /api/jobs/<id>/
+  // If your backend path differs, change ONLY this builder.
+  const jobDetailPath = (id) => `/jobs/${id}/`;
+
+  function logout() {
+    clearTokens();
+    window.location.href = "/login";
+  }
 
   async function fetchJobs({ silent = false } = {}) {
     try {
@@ -40,18 +66,12 @@ export default function Dashboard() {
       setJobs(items);
       setLastUpdated(new Date());
     } catch (e) {
-      // If token invalid, force logout
       if (e?.status === 401) {
         clearTokens();
         window.location.href = "/login";
         return;
       }
-
-      // ✅ IMPORTANT:
-      // If it was a background poll, do NOT show the red banner.
-      if (!silent) {
-        setErr(e?.message || "Failed to load jobs.");
-      }
+      if (!silent) setErr(e?.message || "Failed to load jobs.");
     } finally {
       if (!silent) setLoading(false);
     }
@@ -61,8 +81,7 @@ export default function Dashboard() {
     fetchJobs({ silent: false });
 
     const id = setInterval(() => {
-      // background polling (no scary error banner)
-      fetchJobs({ silent: true });
+      fetchJobs({ silent: true }); // background polling
     }, 10000);
 
     return () => clearInterval(id);
@@ -95,8 +114,68 @@ export default function Dashboard() {
     return list;
   }, [jobs, query, statusFilter]);
 
+  function openEdit(job) {
+    setEditErr("");
+    setEditingJob({
+      ...job,
+      // Normalize fields for inputs
+      date_applied_input: toDateInputValue(job.date_applied || job.created_at),
+      notes_input: job.notes || "",
+      referral_input: !!job.referral,
+      status_input: job.status || "applied",
+    });
+    setIsEditOpen(true);
+  }
+
+  function closeEdit() {
+    if (saving) return;
+    setIsEditOpen(false);
+    setEditingJob(null);
+    setEditErr("");
+  }
+
+  async function saveEdit() {
+    if (!editingJob?.id) {
+      setEditErr("This job has no id. Backend must return an id to edit.");
+      return;
+    }
+
+    setSaving(true);
+    setEditErr("");
+
+    const payload = {
+      status: editingJob.status_input,
+      referral: editingJob.referral_input,
+      notes: editingJob.notes_input,
+      date_applied: editingJob.date_applied_input || null,
+    };
+
+    try {
+      const updated = await api.patch(jobDetailPath(editingJob.id), payload);
+
+      // Update local list immediately (optimistic UI)
+      setJobs((prev) =>
+        prev.map((j) => (j.id === editingJob.id ? { ...j, ...updated } : j))
+      );
+
+      setLastUpdated(new Date());
+      setIsEditOpen(false);
+      setEditingJob(null);
+    } catch (e) {
+      if (e?.status === 401) {
+        clearTokens();
+        window.location.href = "/login";
+        return;
+      }
+      setEditErr(e?.message || "Failed to save changes.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -160,9 +239,24 @@ export default function Dashboard() {
           >
             Refresh
           </button>
+
+          <button
+            onClick={logout}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #e5e7eb",
+              background: "white",
+              color: "#111827",
+              cursor: "pointer",
+            }}
+          >
+            Logout
+          </button>
         </div>
       </div>
 
+      {/* Main error */}
       {err ? (
         <div
           style={{
@@ -178,6 +272,7 @@ export default function Dashboard() {
         </div>
       ) : null}
 
+      {/* Table */}
       <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, overflow: "hidden", background: "white" }}>
         <div style={{ padding: 12, borderBottom: "1px solid #e5e7eb", background: "#f9fafb" }}>
           <div style={{ fontSize: 13, color: "#6b7280" }}>
@@ -202,6 +297,7 @@ export default function Dashboard() {
                   <th style={{ padding: 12 }}>Applied</th>
                   <th style={{ padding: 12 }}>Days</th>
                   <th style={{ padding: 12 }}>Link</th>
+                  <th style={{ padding: 12 }}>Edit</th>
                 </tr>
               </thead>
               <tbody>
@@ -226,12 +322,31 @@ export default function Dashboard() {
                     <td style={{ padding: 12 }}>{daysSince(j.date_applied || j.created_at)}</td>
                     <td style={{ padding: 12 }}>
                       {j.job_url ? (
-                        <a href={j.job_url} target="_blank" rel="noreferrer" style={{ color: "#2563eb", textDecoration: "none" }}>
+                        <a
+                          href={j.job_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: "#2563eb", textDecoration: "none" }}
+                        >
                           Open
                         </a>
                       ) : (
                         "—"
                       )}
+                    </td>
+                    <td style={{ padding: 12 }}>
+                      <button
+                        onClick={() => openEdit(j)}
+                        style={{
+                          padding: "8px 10px",
+                          borderRadius: 10,
+                          border: "1px solid #e5e7eb",
+                          background: "white",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Edit
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -240,6 +355,189 @@ export default function Dashboard() {
           </div>
         )}
       </div>
+
+      {/* Edit Modal */}
+      {isEditOpen && editingJob ? (
+        <div
+          onClick={closeEdit}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 9999,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              background: "white",
+              borderRadius: 16,
+              border: "1px solid #e5e7eb",
+              padding: 16,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Edit Job</h3>
+                <div style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+                  {editingJob.company_name} — {editingJob.job_title}
+                </div>
+              </div>
+              <button
+                onClick={closeEdit}
+                disabled={saving}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  background: "white",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            {editErr ? (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 10,
+                  borderRadius: 12,
+                  background: "#fff1f2",
+                  border: "1px solid #fecaca",
+                  color: "#991b1b",
+                  fontSize: 13,
+                }}
+              >
+                {editErr}
+              </div>
+            ) : null}
+
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Status</div>
+              <select
+                value={editingJob.status_input}
+                onChange={(e) =>
+                  setEditingJob((p) => ({ ...p, status_input: e.target.value }))
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  background: "white",
+                  marginTop: 6,
+                }}
+              >
+                <option value="in_progress">In Progress</option>
+                <option value="applied">Applied</option>
+                <option value="ghosted">Ghosted</option>
+                <option value="rejected">Rejected</option>
+                <option value="accepted">Accepted</option>
+              </select>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Date applied</div>
+              <input
+                type="date"
+                value={editingJob.date_applied_input}
+                onChange={(e) =>
+                  setEditingJob((p) => ({
+                    ...p,
+                    date_applied_input: e.target.value,
+                  }))
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  marginTop: 6,
+                }}
+              />
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={editingJob.referral_input}
+                  onChange={(e) =>
+                    setEditingJob((p) => ({
+                      ...p,
+                      referral_input: e.target.checked,
+                    }))
+                  }
+                />
+                <span style={{ fontSize: 13 }}>Referral used</span>
+              </label>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Notes</div>
+              <textarea
+                value={editingJob.notes_input}
+                onChange={(e) =>
+                  setEditingJob((p) => ({ ...p, notes_input: e.target.value }))
+                }
+                rows={4}
+                placeholder="Add notes (recruiter name, follow-up date, etc.)"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  marginTop: 6,
+                  resize: "vertical",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 14 }}>
+              <button
+                onClick={closeEdit}
+                disabled={saving}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  background: "white",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  opacity: saving ? 0.6 : 1,
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={saveEdit}
+                disabled={saving}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#111827",
+                  color: "white",
+                  cursor: saving ? "not-allowed" : "pointer",
+                  opacity: saving ? 0.7 : 1,
+                }}
+              >
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

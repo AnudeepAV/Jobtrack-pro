@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "JobTrack Pro Saver",
+  "version": "1.0.0",
+  "description": "Save LinkedIn jobs to JobTrack Pro",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "host_permissions": ["https://www.linkedin.com/*"],
+  "action": {
+    "default_title": "Save Job",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/jobs/*"],
+      "js": ["content.js"]
+    }
+  ]
+}

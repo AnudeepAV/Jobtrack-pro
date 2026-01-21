@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JobTrack Pro</title>
+    <style>
+      body { font-family: system-ui, Arial; width: 320px; padding: 12px; }
+      input, select, button { width: 100%; padding: 10px; margin-top: 8px; box-sizing: border-box; }
+      input, select { border-radius: 10px; border: 1px solid #e5e7eb; background: white; }
+      button { background: #111827; color: white; border: none; border-radius: 10px; cursor: pointer; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .muted { color: #6b7280; font-size: 12px; margin-top: 6px; }
+      .box { border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px; margin-top: 10px; background: #f9fafb; }
+      .ok { color: #065f46; }
+      .err { color: #991b1b; }
+    </style>
+  </head>
+
+  <body>
+    <h3 style="margin: 0;">JobTrack Pro</h3>
+    <div class="muted">Save this LinkedIn job to your dashboard.</div>
+
+    <div class="box">
+      <div class="muted">JWT Access Token (from login)</div>
+      <input id="token" type="password" placeholder="Paste access token" />
+
+      <div class="muted">Refresh Token (paste once)</div>
+      <input id="refresh" type="password" placeholder="Paste refresh token" />
+
+      <div class="muted">Status</div>
+      <select id="status">
+        <option value="in_progress">In Progress</option>
+        <option value="applied">Applied</option>
+        <option value="ghosted">Ghosted</option>
+        <option value="rejected">Rejected</option>
+        <option value="accepted">Accepted</option>
+      </select>
+
+      <button id="save">Save this job</button>
+      <div id="msg" class="muted"></div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

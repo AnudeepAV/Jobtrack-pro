@@ -35,12 +35,29 @@ export default function Dashboard() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
+<<<<<<< HEAD
+=======
+  // Edit modal state
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
   const [saving, setSaving] = useState(false);
   const [editErr, setEditErr] = useState("");
 
+<<<<<<< HEAD
+=======
+  // Your existing endpoint config
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
   const JOBS_LIST_PATH = import.meta.env.VITE_JOBS_LIST_PATH || "/jobs/";
+  const jobDetailPath = (id) => `/jobs/${id}/`;
+
+  function logout() {
+    clearTokens();
+    window.location.href = "/login";
+  }
+
+  // ✅ We assume a standard REST endpoint: PATCH /api/jobs/<id>/
+  // If your backend path differs, change ONLY this builder.
   const jobDetailPath = (id) => `/jobs/${id}/`;
 
   function logout() {
@@ -76,7 +93,11 @@ export default function Dashboard() {
     fetchJobs({ silent: false });
 
     const id = setInterval(() => {
+<<<<<<< HEAD
       fetchJobs({ silent: true });
+=======
+      fetchJobs({ silent: true }); // background polling
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
     }, 10000);
 
     return () => clearInterval(id);
@@ -113,8 +134,13 @@ export default function Dashboard() {
     setEditErr("");
     setEditingJob({
       ...job,
+<<<<<<< HEAD
       date_applied_input: toDateInputValue(job.date_applied || job.created_at),
       follow_up_date_input: toDateInputValue(job.follow_up_date),
+=======
+      // Normalize fields for inputs
+      date_applied_input: toDateInputValue(job.date_applied || job.created_at),
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
       notes_input: job.notes || "",
       referral_input: !!job.referral,
       status_input: job.status || "applied",
@@ -143,12 +169,19 @@ export default function Dashboard() {
       referral: editingJob.referral_input,
       notes: editingJob.notes_input,
       date_applied: editingJob.date_applied_input || null,
+<<<<<<< HEAD
       follow_up_date: editingJob.follow_up_date_input || null,
+=======
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
     };
 
     try {
       const updated = await api.patch(jobDetailPath(editingJob.id), payload);
 
+<<<<<<< HEAD
+=======
+      // Update local list immediately (optimistic UI)
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
       setJobs((prev) =>
         prev.map((j) => (j.id === editingJob.id ? { ...j, ...updated } : j))
       );
@@ -170,6 +203,7 @@ export default function Dashboard() {
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
+      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -250,6 +284,7 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Main error */}
       {err ? (
         <div
           style={{
@@ -265,6 +300,7 @@ export default function Dashboard() {
         </div>
       ) : null}
 
+      {/* Table */}
       <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, overflow: "hidden", background: "white" }}>
         <div style={{ padding: 12, borderBottom: "1px solid #e5e7eb", background: "#f9fafb" }}>
           <div style={{ fontSize: 13, color: "#6b7280" }}>
@@ -304,7 +340,16 @@ export default function Dashboard() {
                     <td style={{ padding: 12 }}>{daysSince(j.date_applied || j.created_at)}</td>
                     <td style={{ padding: 12 }}>
                       {j.job_url ? (
+<<<<<<< HEAD
                         <a href={j.job_url} target="_blank" rel="noreferrer" style={{ color: "#2563eb" }}>
+=======
+                        <a
+                          href={j.job_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: "#2563eb", textDecoration: "none" }}
+                        >
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
                           Open
                         </a>
                       ) : (
@@ -333,6 +378,10 @@ export default function Dashboard() {
         )}
       </div>
 
+<<<<<<< HEAD
+=======
+      {/* Edit Modal */}
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
       {isEditOpen && editingJob ? (
         <div
           onClick={closeEdit}
@@ -399,12 +448,48 @@ export default function Dashboard() {
             ) : null}
 
             <div style={{ marginTop: 12 }}>
+<<<<<<< HEAD
               <div style={{ fontSize: 12, color: "#6b7280" }}>Follow-up date</div>
               <input
                 type="date"
                 value={editingJob.follow_up_date_input}
                 onChange={(e) =>
                   setEditingJob((p) => ({ ...p, follow_up_date_input: e.target.value }))
+=======
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Status</div>
+              <select
+                value={editingJob.status_input}
+                onChange={(e) =>
+                  setEditingJob((p) => ({ ...p, status_input: e.target.value }))
+                }
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  background: "white",
+                  marginTop: 6,
+                }}
+              >
+                <option value="in_progress">In Progress</option>
+                <option value="applied">Applied</option>
+                <option value="ghosted">Ghosted</option>
+                <option value="rejected">Rejected</option>
+                <option value="accepted">Accepted</option>
+              </select>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Date applied</div>
+              <input
+                type="date"
+                value={editingJob.date_applied_input}
+                onChange={(e) =>
+                  setEditingJob((p) => ({
+                    ...p,
+                    date_applied_input: e.target.value,
+                  }))
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
                 }
                 style={{
                   width: "100%",
@@ -416,6 +501,45 @@ export default function Dashboard() {
               />
             </div>
 
+<<<<<<< HEAD
+=======
+            <div style={{ marginTop: 12 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="checkbox"
+                  checked={editingJob.referral_input}
+                  onChange={(e) =>
+                    setEditingJob((p) => ({
+                      ...p,
+                      referral_input: e.target.checked,
+                    }))
+                  }
+                />
+                <span style={{ fontSize: 13 }}>Referral used</span>
+              </label>
+            </div>
+
+            <div style={{ marginTop: 12 }}>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Notes</div>
+              <textarea
+                value={editingJob.notes_input}
+                onChange={(e) =>
+                  setEditingJob((p) => ({ ...p, notes_input: e.target.value }))
+                }
+                rows={4}
+                placeholder="Add notes (recruiter name, follow-up date, etc.)"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  marginTop: 6,
+                  resize: "vertical",
+                }}
+              />
+            </div>
+
+>>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 14 }}>
               <button
                 onClick={closeEdit}

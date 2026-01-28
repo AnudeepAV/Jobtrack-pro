@@ -15,35 +15,24 @@ class JobApplication(models.Model):
         REJECTED = "rejected", "Rejected"
         GHOSTED = "ghosted", "Ghosted"
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name="job_applications",
-    )
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="job_applications")
 
     company_name = models.CharField(max_length=120)
     job_title = models.CharField(max_length=160)
-    job_url = models.URLField()
-    location_type = models.CharField(
-        max_length=10, choices=LocationType.choices, default=LocationType.ONSITE
-    )
+    job_url = models.URLField(unique=True)
+
+    location_type = models.CharField(max_length=20, choices=LocationType.choices, default=LocationType.ONSITE)
     referral = models.BooleanField(default=False)
-    date_applied = models.DateField()
-    status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.APPLIED
-    )
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.APPLIED)
+
+    date_applied = models.DateField(null=True, blank=True)
+
+    # ✅ NEW
     notes = models.TextField(blank=True, default="")
+    follow_up_date = models.DateField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["-date_applied", "-created_at"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["user", "job_url"], name="unique_job_url_per_user"
-            )
-        ]
 
     def __str__(self):
         return f"{self.company_name} - {self.job_title}"

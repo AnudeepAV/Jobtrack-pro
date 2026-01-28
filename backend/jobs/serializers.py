@@ -12,9 +12,10 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             "job_url",
             "location_type",
             "referral",
-            "date_applied",
             "status",
+            "date_applied",
             "notes",
+            "follow_up_date",
             "created_at",
             "updated_at",
         ]

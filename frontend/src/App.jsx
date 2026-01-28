@@ -1,10 +1,12 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
-import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
-import { isLoggedIn } from "./lib/auth";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-function ProtectedRoute({ children }) {
-  return isLoggedIn() ? children : <Navigate to="/login" replace />;
+import Login from "./pages/Login.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+
+function RequireAuth({ children }) {
+  const token = localStorage.getItem("access_token");
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
 }
 
 export default function App() {
@@ -16,9 +18,9 @@ export default function App() {
         <Route
           path="/dashboard"
           element={
-            <ProtectedRoute>
+            <RequireAuth>
               <Dashboard />
-            </ProtectedRoute>
+            </RequireAuth>
           }
         />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

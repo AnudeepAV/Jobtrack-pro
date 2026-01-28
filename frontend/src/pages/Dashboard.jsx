@@ -36,14 +36,18 @@ export default function Dashboard() {
   const [statusFilter, setStatusFilter] = useState("all");
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
   // Edit modal state
 >>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
+=======
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editingJob, setEditingJob] = useState(null);
   const [saving, setSaving] = useState(false);
   const [editErr, setEditErr] = useState("");
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
   // Your existing endpoint config
@@ -58,6 +62,9 @@ export default function Dashboard() {
 
   // ✅ We assume a standard REST endpoint: PATCH /api/jobs/<id>/
   // If your backend path differs, change ONLY this builder.
+=======
+  const JOBS_LIST_PATH = import.meta.env.VITE_JOBS_LIST_PATH || "/jobs/";
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
   const jobDetailPath = (id) => `/jobs/${id}/`;
 
   function logout() {
@@ -94,10 +101,14 @@ export default function Dashboard() {
 
     const id = setInterval(() => {
 <<<<<<< HEAD
+<<<<<<< HEAD
       fetchJobs({ silent: true });
 =======
       fetchJobs({ silent: true }); // background polling
 >>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
+=======
+      fetchJobs({ silent: true });
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
     }, 10000);
 
     return () => clearInterval(id);
@@ -135,12 +146,17 @@ export default function Dashboard() {
     setEditingJob({
       ...job,
 <<<<<<< HEAD
+<<<<<<< HEAD
       date_applied_input: toDateInputValue(job.date_applied || job.created_at),
       follow_up_date_input: toDateInputValue(job.follow_up_date),
 =======
       // Normalize fields for inputs
       date_applied_input: toDateInputValue(job.date_applied || job.created_at),
 >>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
+=======
+      date_applied_input: toDateInputValue(job.date_applied || job.created_at),
+      follow_up_date_input: toDateInputValue(job.follow_up_date),
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
       notes_input: job.notes || "",
       referral_input: !!job.referral,
       status_input: job.status || "applied",
@@ -170,18 +186,25 @@ export default function Dashboard() {
       notes: editingJob.notes_input,
       date_applied: editingJob.date_applied_input || null,
 <<<<<<< HEAD
+<<<<<<< HEAD
       follow_up_date: editingJob.follow_up_date_input || null,
 =======
 >>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
+=======
+      follow_up_date: editingJob.follow_up_date_input || null,
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
     };
 
     try {
       const updated = await api.patch(jobDetailPath(editingJob.id), payload);
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
       // Update local list immediately (optimistic UI)
 >>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
+=======
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
       setJobs((prev) =>
         prev.map((j) => (j.id === editingJob.id ? { ...j, ...updated } : j))
       );
@@ -203,7 +226,6 @@ export default function Dashboard() {
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto", padding: 16, fontFamily: "system-ui" }}>
-      {/* Header */}
       <div
         style={{
           display: "flex",
@@ -284,7 +306,6 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Main error */}
       {err ? (
         <div
           style={{
@@ -300,7 +321,6 @@ export default function Dashboard() {
         </div>
       ) : null}
 
-      {/* Table */}
       <div style={{ border: "1px solid #e5e7eb", borderRadius: 14, overflow: "hidden", background: "white" }}>
         <div style={{ padding: 12, borderBottom: "1px solid #e5e7eb", background: "#f9fafb" }}>
           <div style={{ fontSize: 13, color: "#6b7280" }}>
@@ -341,6 +361,7 @@ export default function Dashboard() {
                     <td style={{ padding: 12 }}>
                       {j.job_url ? (
 <<<<<<< HEAD
+<<<<<<< HEAD
                         <a href={j.job_url} target="_blank" rel="noreferrer" style={{ color: "#2563eb" }}>
 =======
                         <a
@@ -350,6 +371,9 @@ export default function Dashboard() {
                           style={{ color: "#2563eb", textDecoration: "none" }}
                         >
 >>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
+=======
+                        <a href={j.job_url} target="_blank" rel="noreferrer" style={{ color: "#2563eb" }}>
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
                           Open
                         </a>
                       ) : (
@@ -379,9 +403,12 @@ export default function Dashboard() {
       </div>
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 =======
       {/* Edit Modal */}
 >>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
+=======
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
       {isEditOpen && editingJob ? (
         <div
           onClick={closeEdit}
@@ -449,6 +476,7 @@ export default function Dashboard() {
 
             <div style={{ marginTop: 12 }}>
 <<<<<<< HEAD
+<<<<<<< HEAD
               <div style={{ fontSize: 12, color: "#6b7280" }}>Follow-up date</div>
               <input
                 type="date"
@@ -481,15 +509,22 @@ export default function Dashboard() {
 
             <div style={{ marginTop: 12 }}>
               <div style={{ fontSize: 12, color: "#6b7280" }}>Date applied</div>
+=======
+              <div style={{ fontSize: 12, color: "#6b7280" }}>Follow-up date</div>
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
               <input
                 type="date"
-                value={editingJob.date_applied_input}
+                value={editingJob.follow_up_date_input}
                 onChange={(e) =>
+<<<<<<< HEAD
                   setEditingJob((p) => ({
                     ...p,
                     date_applied_input: e.target.value,
                   }))
 >>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
+=======
+                  setEditingJob((p) => ({ ...p, follow_up_date_input: e.target.value }))
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
                 }
                 style={{
                   width: "100%",
@@ -501,6 +536,7 @@ export default function Dashboard() {
               />
             </div>
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
             <div style={{ marginTop: 12 }}>
@@ -540,6 +576,8 @@ export default function Dashboard() {
             </div>
 
 >>>>>>> 2a3caf5 (Milestone 8: Edit job modal (status, notes, referral, date applied))
+=======
+>>>>>>> d90b054 (Milestone 9: Add follow_up_date field + expose in API + UI edit)
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 14 }}>
               <button
                 onClick={closeEdit}

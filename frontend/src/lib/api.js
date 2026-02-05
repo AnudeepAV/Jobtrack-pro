@@ -1,12 +1,29 @@
-// frontend/src/lib/api.js
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+import axios from "axios";
 
-export function getAccessToken() {
-  return localStorage.getItem("access_token") || "";
+/**
+ * Use .env / Netlify env var:
+ * VITE_API_BASE_URL=https://jobtrack-pro-api.onrender.com/api
+ */
+const API_BASE =
+  import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api";
+
+// -------------------- token helpers --------------------
+export function setAccessToken(token) {
+  if (token) localStorage.setItem("access_token", token);
+  else localStorage.removeItem("access_token");
 }
 
-export function setAccessToken(token) {
-  localStorage.setItem("access_token", token);
+export function setRefreshToken(token) {
+  if (token) localStorage.setItem("refresh_token", token);
+  else localStorage.removeItem("refresh_token");
+}
+
+export function getAccessToken() {
+  return localStorage.getItem("access_token");
+}
+
+export function getRefreshToken() {
+  return localStorage.getItem("refresh_token");
 }
 
 export function clearTokens() {
@@ -14,53 +31,27 @@ export function clearTokens() {
   localStorage.removeItem("refresh_token");
 }
 
-async function request(path, { method = "GET", body, headers = {} } = {}) {
+// -------------------- axios instance --------------------
+const api = axios.create({
+  baseURL: API_BASE,
+});
+
+api.interceptors.request.use((config) => {
   const token = getAccessToken();
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
+});
 
-  let res;
-  try {
-    res = await fetch(`${BASE_URL}${path}`, {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...headers,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    const err = new Error(
-      "Failed to fetch (backend unreachable). Is backend running on 127.0.0.1:8000?"
-    );
-    err.status = 0;
-    throw err;
+// Don't redirect here (Netlify builds / SSR-ish routes can behave weird).
+// Just clear tokens if unauthorized.
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err?.response?.status === 401) {
+      clearTokens();
+    }
+    return Promise.reject(err);
   }
-
-  const text = await res.text();
-  let data = null;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = text;
-  }
-
-  if (!res.ok) {
-    const message = data?.detail || data?.message || `Request failed (${res.status})`;
-    const err = new Error(message);
-    err.status = res.status;
-    err.data = data;
-    throw err;
-  }
-
-  return data;
-}
-
-const api = {
-  get: (path) => request(path, { method: "GET" }),
-  post: (path, body) => request(path, { method: "POST", body }),
-  put: (path, body) => request(path, { method: "PUT", body }),
-  patch: (path, body) => request(path, { method: "PATCH", body }),
-  del: (path) => request(path, { method: "DELETE" }),
-};
+);
 
 export default api;

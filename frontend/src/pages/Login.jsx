@@ -1,144 +1,97 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
 import api, { setAccessToken, setRefreshToken } from "../lib/api";
 
 export default function Login() {
-  const navigate = useNavigate();
-
+  const nav = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
+  const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
 
   async function onSubmit(e) {
     e.preventDefault();
-    setError("");
+    setErr("");
     setLoading(true);
 
     try {
-      // Your backend routes: /api/auth/login/
-      const res = await api.post("/auth/login/", {
-        username,
-        password,
-      });
+      // IMPORTANT: api baseURL already includes /api
+      // So endpoint is /auth/login/
+      const res = await api.post("/auth/login/", { username, password });
 
-      // SimpleJWT returns: { access: "...", refresh: "..." }
       const access = res?.data?.access;
       const refresh = res?.data?.refresh;
 
-      if (!access) {
-        setError("Login response did not include access token.");
+      if (!access || !refresh) {
+        setErr("Login response did not include access token.");
         setLoading(false);
         return;
       }
 
       setAccessToken(access);
-      if (refresh) setRefreshToken(refresh);
+      setRefreshToken(refresh);
 
-      navigate("/dashboard");
-    } catch (err) {
+      nav("/dashboard");
+    } catch (e2) {
+      // show backend error if present
       const msg =
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
+        e2?.response?.data?.detail ||
+        e2?.response?.data?.message ||
         "Login failed. Check username/password.";
-      setError(msg);
+      setErr(msg);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
-      <div
-        style={{
-          width: 420,
-          padding: 24,
-          border: "1px solid #e5e7eb",
-          borderRadius: 16,
-          background: "#fff",
-        }}
+    <div className="min-h-screen flex items-center justify-center p-6 bg-white">
+      <form
+        onSubmit={onSubmit}
+        className="w-full max-w-md border border-gray-200 rounded-2xl p-6 shadow-sm"
       >
-        <h2 style={{ margin: 0 }}>Login</h2>
-        <p style={{ marginTop: 6, color: "#6b7280" }}>
+        <h2 className="text-xl font-semibold">Login</h2>
+        <p className="text-sm text-gray-500 mt-1">
           Sign in to view your job dashboard.
         </p>
 
-        {error ? (
-          <div
-            style={{
-              background: "#fee2e2",
-              color: "#991b1b",
-              padding: 10,
-              borderRadius: 10,
-              marginBottom: 12,
-              border: "1px solid #fecaca",
-            }}
-          >
-            {error}
+        {err && (
+          <div className="mt-4 p-3 rounded-xl bg-red-50 text-red-700 border border-red-200 text-sm">
+            {err}
           </div>
-        ) : null}
+        )}
 
-        <form onSubmit={onSubmit}>
-          <label style={{ display: "block", marginTop: 10, fontSize: 13 }}>
-            Username
-          </label>
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="Your username"
-            style={{
-              width: "100%",
-              marginTop: 6,
-              padding: 10,
-              borderRadius: 10,
-              border: "1px solid #e5e7eb",
-              boxSizing: "border-box",
-            }}
-          />
+        <label className="block mt-4 text-sm font-medium">Username</label>
+        <input
+          className="mt-2 w-full p-3 border border-gray-200 rounded-xl"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="username"
+          autoComplete="username"
+        />
 
-          <label style={{ display: "block", marginTop: 12, fontSize: 13 }}>
-            Password
-          </label>
-          <input
-            value={password}
-            type="password"
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Your password"
-            style={{
-              width: "100%",
-              marginTop: 6,
-              padding: 10,
-              borderRadius: 10,
-              border: "1px solid #e5e7eb",
-              boxSizing: "border-box",
-            }}
-          />
+        <label className="block mt-4 text-sm font-medium">Password</label>
+        <input
+          className="mt-2 w-full p-3 border border-gray-200 rounded-xl"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="password"
+          autoComplete="current-password"
+        />
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              marginTop: 16,
-              padding: 12,
-              borderRadius: 12,
-              border: "none",
-              cursor: loading ? "not-allowed" : "pointer",
-              background: "#111827",
-              color: "white",
-              fontWeight: 600,
-            }}
-          >
-            {loading ? "Signing in..." : "Sign in"}
-          </button>
-        </form>
+        <button
+          className="mt-6 w-full p-3 rounded-xl bg-gray-900 text-white font-medium disabled:opacity-60"
+          disabled={loading}
+          type="submit"
+        >
+          {loading ? "Signing in..." : "Sign in"}
+        </button>
 
-        <div style={{ marginTop: 10, fontSize: 12, color: "#6b7280" }}>
+        <div className="mt-3 text-xs text-gray-500">
           Login endpoint: <code>/auth/login/</code>
         </div>
-      </div>
+      </form>
     </div>
   );
 }

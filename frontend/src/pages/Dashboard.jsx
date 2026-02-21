@@ -39,7 +39,6 @@ function classifyFollowUp(followUpDateStr) {
   if (Number.isNaN(f.getTime())) return "none";
 
   const diffDays = Math.floor((f - today) / (1000 * 60 * 60 * 24));
-
   if (diffDays < 0) return "overdue";
   if (diffDays <= 3) return "due_soon";
   return "later";
@@ -97,6 +96,22 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false);
   const [editErr, setEditErr] = useState("");
 
+  // ✅ Create modal state
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createErr, setCreateErr] = useState("");
+  const [newJob, setNewJob] = useState({
+    company_name: "",
+    job_title: "",
+    job_url: "",
+    location_type: "remote",
+    referral: false,
+    status: "applied",
+    date_applied: "",
+    follow_up_date: "",
+    notes: "",
+  });
+
   const JOBS_LIST_PATH = import.meta.env.VITE_JOBS_LIST_PATH || "/jobs/";
   const jobDetailPath = (id) => `/jobs/${id}/`;
 
@@ -135,11 +150,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchJobs({ silent: false });
-
-    const id = setInterval(() => {
-      fetchJobs({ silent: true });
-    }, 10000);
-
+    const id = setInterval(() => fetchJobs({ silent: true }), 10000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -242,25 +253,101 @@ export default function Dashboard() {
         window.location.href = "/login";
         return;
       }
-      setEditErr(e?.message || "Failed to save changes.");
+      setEditErr(e?.response?.data?.detail || e?.message || "Failed to save changes.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // ✅ Create Job modal handlers
+  function openCreate() {
+    setCreateErr("");
+    setNewJob({
+      company_name: "",
+      job_title: "",
+      job_url: "",
+      location_type: "remote",
+      referral: false,
+      status: "applied",
+      date_applied: "",
+      follow_up_date: "",
+      notes: "",
+    });
+    setIsCreateOpen(true);
+  }
+
+  function closeCreate() {
+    if (creating) return;
+    setIsCreateOpen(false);
+    setCreateErr("");
+  }
+
+  async function createJob() {
+    setCreating(true);
+    setCreateErr("");
+
+    const payload = {
+      company_name: newJob.company_name.trim(),
+      job_title: newJob.job_title.trim(),
+      job_url: newJob.job_url.trim(),
+      location_type: newJob.location_type,
+      referral: !!newJob.referral,
+      status: newJob.status,
+      notes: newJob.notes?.trim() || "",
+      date_applied: newJob.date_applied || null,
+      follow_up_date: newJob.follow_up_date || null,
+    };
+
+    // basic front-end validation
+    if (!payload.company_name || !payload.job_title || !payload.job_url) {
+      setCreateErr("Company name, Job title, and Job URL are required.");
+      setCreating(false);
+      return;
+    }
+
+    try {
+      const res = await api.post("/jobs/", payload);
+      const created = res?.data ?? res;
+
+      // add to UI immediately
+      setJobs((prev) => [created, ...prev]);
+      setLastUpdated(new Date());
+      setIsCreateOpen(false);
+    } catch (e) {
+      const status = e?.response?.status ?? e?.status;
+
+      if (status === 401) {
+        clearTokens();
+        window.location.href = "/login";
+        return;
+      }
+
+      // try to show backend validation messages
+      const data = e?.response?.data;
+      const msg =
+        data?.detail ||
+        data?.job_url?.[0] ||
+        data?.company_name?.[0] ||
+        data?.job_title?.[0] ||
+        e?.message ||
+        "Failed to create job.";
+      setCreateErr(msg);
+    } finally {
+      setCreating(false);
     }
   }
 
   const stats = useMemo(() => {
     let overdue = 0;
     let dueSoon = 0;
-    let none = 0;
 
     for (const j of jobs) {
       const cls = classifyFollowUp(j.follow_up_date);
       if (cls === "overdue") overdue += 1;
       else if (cls === "due_soon") dueSoon += 1;
-      else if (cls === "none") none += 1;
     }
 
-    return { overdue, dueSoon, none, total: jobs.length };
+    return { overdue, dueSoon, total: jobs.length };
   }, [jobs]);
 
   return (
@@ -343,6 +430,21 @@ export default function Dashboard() {
             <option value="due_soon">Due soon (≤ 3 days)</option>
             <option value="none">No follow-up</option>
           </select>
+
+          {/* ✅ Add Job button */}
+          <button
+            onClick={openCreate}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "none",
+              background: "#2563eb",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            + Add Job
+          </button>
 
           <button
             onClick={() => fetchJobs({ silent: false })}
@@ -449,7 +551,226 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Edit Modal */}
+      {/* ✅ CREATE MODAL */}
+      {isCreateOpen ? (
+        <div
+          onClick={closeCreate}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            zIndex: 9999,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 560,
+              background: "white",
+              borderRadius: 16,
+              border: "1px solid #e5e7eb",
+              padding: 16,
+              boxShadow: "0 10px 30px rgba(0,0,0,0.12)",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Add Job</h3>
+                <div style={{ color: "#6b7280", fontSize: 13, marginTop: 4 }}>
+                  Create a new job application entry.
+                </div>
+              </div>
+
+              <button
+                onClick={closeCreate}
+                disabled={creating}
+                style={{
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  background: "white",
+                  cursor: creating ? "not-allowed" : "pointer",
+                  opacity: creating ? 0.6 : 1,
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            {createErr ? (
+              <div
+                style={{
+                  marginTop: 12,
+                  padding: 10,
+                  borderRadius: 12,
+                  background: "#fff1f2",
+                  border: "1px solid #fecaca",
+                  color: "#991b1b",
+                  fontSize: 13,
+                }}
+              >
+                {createErr}
+              </div>
+            ) : null}
+
+            <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Company name *</div>
+                <input
+                  value={newJob.company_name}
+                  onChange={(e) => setNewJob((p) => ({ ...p, company_name: e.target.value }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb" }}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Job title *</div>
+                <input
+                  value={newJob.job_title}
+                  onChange={(e) => setNewJob((p) => ({ ...p, job_title: e.target.value }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb" }}
+                />
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Job URL *</div>
+                <input
+                  value={newJob.job_url}
+                  onChange={(e) => setNewJob((p) => ({ ...p, job_url: e.target.value }))}
+                  placeholder="https://..."
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb" }}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Location type</div>
+                <select
+                  value={newJob.location_type}
+                  onChange={(e) => setNewJob((p) => ({ ...p, location_type: e.target.value }))}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1px solid #e5e7eb",
+                    background: "white",
+                  }}
+                >
+                  <option value="remote">Remote</option>
+                  <option value="onsite">Onsite</option>
+                </select>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Status</div>
+                <select
+                  value={newJob.status}
+                  onChange={(e) => setNewJob((p) => ({ ...p, status: e.target.value }))}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1px solid #e5e7eb",
+                    background: "white",
+                  }}
+                >
+                  <option value="in_progress">In Progress</option>
+                  <option value="applied">Applied</option>
+                  <option value="ghosted">Ghosted</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="accepted">Accepted</option>
+                </select>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Date applied</div>
+                <input
+                  type="date"
+                  value={newJob.date_applied}
+                  onChange={(e) => setNewJob((p) => ({ ...p, date_applied: e.target.value }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb" }}
+                />
+              </div>
+
+              <div>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Follow-up date</div>
+                <input
+                  type="date"
+                  value={newJob.follow_up_date}
+                  onChange={(e) => setNewJob((p) => ({ ...p, follow_up_date: e.target.value }))}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #e5e7eb" }}
+                />
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={newJob.referral}
+                    onChange={(e) => setNewJob((p) => ({ ...p, referral: e.target.checked }))}
+                  />
+                  <span style={{ fontSize: 13 }}>Referral used</span>
+                </label>
+              </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Notes</div>
+                <textarea
+                  rows={4}
+                  value={newJob.notes}
+                  onChange={(e) => setNewJob((p) => ({ ...p, notes: e.target.value }))}
+                  style={{
+                    width: "100%",
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1px solid #e5e7eb",
+                    resize: "vertical",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 14 }}>
+              <button
+                onClick={closeCreate}
+                disabled={creating}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid #e5e7eb",
+                  background: "white",
+                  cursor: creating ? "not-allowed" : "pointer",
+                  opacity: creating ? 0.6 : 1,
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={createJob}
+                disabled={creating}
+                style={{
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "none",
+                  background: "#2563eb",
+                  color: "white",
+                  cursor: creating ? "not-allowed" : "pointer",
+                  opacity: creating ? 0.7 : 1,
+                }}
+              >
+                {creating ? "Creating..." : "Create Job"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* EDIT MODAL (your existing) */}
       {isEditOpen && editingJob ? (
         <div
           onClick={closeEdit}
@@ -586,7 +907,6 @@ export default function Dashboard() {
                 value={editingJob.notes_input}
                 onChange={(e) => setEditingJob((p) => ({ ...p, notes_input: e.target.value }))}
                 rows={4}
-                placeholder="Add notes (recruiter name, follow-up date, etc.)"
                 style={{
                   width: "100%",
                   padding: "10px 12px",

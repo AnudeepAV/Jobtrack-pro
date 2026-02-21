@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { setAccessToken, setRefreshToken } from "../lib/api";
+import api, { getAccessToken, setAccessToken, setRefreshToken } from "../lib/api";
 
 export default function Login() {
   const nav = useNavigate();
@@ -9,36 +9,56 @@ export default function Login() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // If already logged in, go straight to dashboard
+  useEffect(() => {
+    const token = getAccessToken();
+    if (token) nav("/dashboard", { replace: true });
+  }, [nav]);
+
   async function onSubmit(e) {
     e.preventDefault();
     setErr("");
     setLoading(true);
 
     try {
-      // IMPORTANT: api baseURL already includes /api
+      const u = username.trim();
+      const p = password;
+
+      if (!u || !p) {
+        setErr("Please enter username and password.");
+        return;
+      }
+
+      // api baseURL already includes /api
       // So endpoint is /auth/login/
-      const res = await api.post("/auth/login/", { username, password });
+      const res = await api.post("/auth/login/", { username: u, password: p });
 
       const access = res?.data?.access;
       const refresh = res?.data?.refresh;
 
       if (!access || !refresh) {
-        setErr("Login response did not include access token.");
-        setLoading(false);
+        setErr("Login response did not include access/refresh tokens.");
         return;
       }
 
       setAccessToken(access);
       setRefreshToken(refresh);
 
-      nav("/dashboard");
+      nav("/dashboard", { replace: true });
     } catch (e2) {
-      // show backend error if present
-      const msg =
-        e2?.response?.data?.detail ||
-        e2?.response?.data?.message ||
-        "Login failed. Check username/password.";
-      setErr(msg);
+      const status = e2?.response?.status;
+
+      // Most common: wrong credentials
+      if (status === 401 || status === 403) {
+        setErr("Login failed. Check username/password.");
+      } else {
+        const msg =
+          e2?.response?.data?.detail ||
+          e2?.response?.data?.message ||
+          e2?.message ||
+          "Login failed.";
+        setErr(msg);
+      }
     } finally {
       setLoading(false);
     }

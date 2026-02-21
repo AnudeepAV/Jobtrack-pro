@@ -65,7 +65,14 @@ function FollowUpBadge({ followUpDate }) {
 
   if (cls === "overdue") {
     return (
-      <span style={{ ...base, background: "#fff1f2", border: "1px solid #fecaca", color: "#991b1b" }}>
+      <span
+        style={{
+          ...base,
+          background: "#fff1f2",
+          border: "1px solid #fecaca",
+          color: "#991b1b",
+        }}
+      >
         ⛔ Overdue
       </span>
     );
@@ -73,17 +80,20 @@ function FollowUpBadge({ followUpDate }) {
 
   if (cls === "due_soon") {
     return (
-      <span style={{ ...base, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e" }}>
+      <span
+        style={{
+          ...base,
+          background: "#fffbeb",
+          border: "1px solid #fde68a",
+          color: "#92400e",
+        }}
+      >
         ⚠️ Due soon
       </span>
     );
   }
 
-  return (
-    <span style={base}>
-      📅 Scheduled
-    </span>
-  );
+  return <span style={base}>📅 Scheduled</span>;
 }
 
 export default function Dashboard() {
@@ -94,7 +104,7 @@ export default function Dashboard() {
 
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [followUpFilter, setFollowUpFilter] = useState("all"); // ✅ NEW
+  const [followUpFilter, setFollowUpFilter] = useState("all");
 
   // Edit modal state
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -102,12 +112,46 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false);
   const [editErr, setEditErr] = useState("");
 
-  const JOBS_LIST_PATH = import.meta.env.VITE_JOBS_LIST_PATH || "/jobs/";
+  // ✅ Debug state (shows what the backend returned)
+  const [debugInfo, setDebugInfo] = useState({
+    pathUsed: "",
+    status: "",
+    rawType: "",
+    rawPreview: "",
+    count: 0,
+  });
+
+  // ✅ Always use leading slash here
+  const JOBS_LIST_PATH = (import.meta.env.VITE_JOBS_LIST_PATH || "/jobs/").startsWith("/")
+    ? (import.meta.env.VITE_JOBS_LIST_PATH || "/jobs/")
+    : `/${import.meta.env.VITE_JOBS_LIST_PATH || "jobs/"}`;
+
   const jobDetailPath = (id) => `/jobs/${id}/`;
 
   function logout() {
     clearTokens();
     window.location.href = "/login";
+  }
+
+  // ✅ Strong parsing: supports array, paginated results, or weird payloads
+  function normalizeJobsPayload(payload) {
+    if (Array.isArray(payload)) return payload;
+
+    // paginated DRF: { results: [...] }
+    if (payload && Array.isArray(payload.results)) return payload.results;
+
+    // sometimes payload could be stringified JSON
+    if (typeof payload === "string") {
+      try {
+        const parsed = JSON.parse(payload);
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed && Array.isArray(parsed.results)) return parsed.results;
+      } catch {
+        // ignore
+      }
+    }
+
+    return [];
   }
 
   async function fetchJobs({ silent = false } = {}) {
@@ -117,18 +161,57 @@ export default function Dashboard() {
         setErr("");
       }
 
-      const data = await api.get(JOBS_LIST_PATH);
-      const items = Array.isArray(data) ? data : data?.results || [];
+      const res = await api.get(JOBS_LIST_PATH);
+      const payload = res?.data;
+
+      const items = normalizeJobsPayload(payload);
 
       setJobs(items);
       setLastUpdated(new Date());
+
+      // ✅ Debug data shown in UI
+      setDebugInfo({
+        pathUsed: JOBS_LIST_PATH,
+        status: String(res?.status ?? "unknown"),
+        rawType: Array.isArray(payload) ? "array" : typeof payload,
+        rawPreview:
+          typeof payload === "string"
+            ? payload.slice(0, 200)
+            : JSON.stringify(payload, null, 2).slice(0, 400),
+        count: items.length,
+      });
+
+      // ✅ Debug in console too
+      // (so you can compare with Network tab)
+      console.log("[Dashboard] GET", JOBS_LIST_PATH, "status:", res?.status);
+      console.log("[Dashboard] raw payload:", payload);
+      console.log("[Dashboard] items:", items);
     } catch (e) {
-      if (e?.status === 401) {
+      const status = e?.response?.status;
+
+      // Show debug info even on error
+      setDebugInfo({
+        pathUsed: JOBS_LIST_PATH,
+        status: String(status ?? "error"),
+        rawType: "error",
+        rawPreview: JSON.stringify(e?.response?.data ?? e?.message ?? e, null, 2).slice(0, 400),
+        count: 0,
+      });
+
+      if (status === 401) {
         clearTokens();
         window.location.href = "/login";
         return;
       }
-      if (!silent) setErr(e?.message || "Failed to load jobs.");
+
+      if (!silent) {
+        const msg =
+          e?.response?.data?.detail ||
+          e?.response?.data?.message ||
+          e?.message ||
+          "Failed to load jobs.";
+        setErr(msg);
+      }
     } finally {
       if (!silent) setLoading(false);
     }
@@ -172,10 +255,6 @@ export default function Dashboard() {
       });
     }
 
-    // Sorting priority:
-    // 1) overdue first
-    // 2) due soon
-    // 3) latest applied
     list = [...list].sort((a, b) => {
       const ra = classifyFollowUp(a.follow_up_date);
       const rb = classifyFollowUp(b.follow_up_date);
@@ -232,18 +311,21 @@ export default function Dashboard() {
     };
 
     try {
-      const updated = await api.patch(jobDetailPath(editingJob.id), payload);
+      const res = await api.patch(jobDetailPath(editingJob.id), payload);
+      const updated = res?.data ?? res;
+
       setJobs((prev) => prev.map((j) => (j.id === editingJob.id ? { ...j, ...updated } : j)));
       setLastUpdated(new Date());
       setIsEditOpen(false);
       setEditingJob(null);
     } catch (e) {
-      if (e?.status === 401) {
+      const status = e?.response?.status;
+      if (status === 401) {
         clearTokens();
         window.location.href = "/login";
         return;
       }
-      setEditErr(e?.message || "Failed to save changes.");
+      setEditErr(e?.response?.data?.detail || e?.message || "Failed to save changes.");
     } finally {
       setSaving(false);
     }
@@ -375,6 +457,31 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* ✅ Debug box (this will tell us the truth) */}
+      <div
+        style={{
+          marginBottom: 12,
+          padding: 12,
+          borderRadius: 12,
+          border: "1px solid #e5e7eb",
+          background: "#f9fafb",
+          fontSize: 12,
+          color: "#111827",
+        }}
+      >
+        <div><b>DEBUG:</b></div>
+        <div>Path used: <code>{debugInfo.pathUsed}</code></div>
+        <div>Status: <code>{debugInfo.status}</code></div>
+        <div>Raw type: <code>{debugInfo.rawType}</code></div>
+        <div>Items count: <code>{debugInfo.count}</code></div>
+        <div style={{ marginTop: 6 }}>
+          Raw preview:
+          <pre style={{ whiteSpace: "pre-wrap", marginTop: 6, maxHeight: 160, overflow: "auto" }}>
+            {debugInfo.rawPreview}
+          </pre>
+        </div>
+      </div>
+
       {err ? (
         <div
           style={{
@@ -408,7 +515,10 @@ export default function Dashboard() {
             </thead>
             <tbody>
               {filteredJobs.map((j) => (
-                <tr key={j.id || j.job_url} style={{ borderTop: "1px solid #f3f4f6" }}>
+                <tr
+                  key={`${j.id ?? "noid"}-${j.job_url ?? "nourl"}-${j.created_at ?? ""}`}
+                  style={{ borderTop: "1px solid #f3f4f6" }}
+                >
                   <td style={{ padding: 12, fontWeight: 600 }}>{j.company_name}</td>
                   <td style={{ padding: 12 }}>{j.job_title}</td>
                   <td style={{ padding: 12 }}>{j.status || "—"}</td>
@@ -445,6 +555,16 @@ export default function Dashboard() {
               ))}
             </tbody>
           </table>
+
+          {loading ? (
+            <div style={{ padding: 12, color: "#6b7280", fontSize: 13 }}>Loading...</div>
+          ) : null}
+
+          {!loading && filteredJobs.length === 0 ? (
+            <div style={{ padding: 12, color: "#6b7280", fontSize: 13 }}>
+              No jobs to display (filteredJobs is empty).
+            </div>
+          ) : null}
         </div>
       </div>
 

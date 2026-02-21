@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api, { clearTokens } from "../lib/api";
 
 function daysSince(dateStr) {
@@ -81,6 +82,8 @@ function FollowUpBadge({ followUpDate }) {
 }
 
 export default function Dashboard() {
+  const nav = useNavigate();
+
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -116,8 +119,8 @@ export default function Dashboard() {
 
       const res = await api.get(JOBS_LIST_PATH);
       const payload = res?.data;
-
       const items = Array.isArray(payload) ? payload : payload?.results || [];
+
       setJobs(items);
       setLastUpdated(new Date());
     } catch (e) {
@@ -175,12 +178,11 @@ export default function Dashboard() {
       });
     }
 
-    // overdue > due soon > later > none, then recent applied
     list = [...list].sort((a, b) => {
       const ra = classifyFollowUp(a.follow_up_date);
       const rb = classifyFollowUp(b.follow_up_date);
-      const rank = (r) => (r === "overdue" ? 0 : r === "due_soon" ? 1 : r === "later" ? 2 : 3);
 
+      const rank = (r) => (r === "overdue" ? 0 : r === "due_soon" ? 1 : r === "later" ? 2 : 3);
       const pa = rank(ra);
       const pb = rank(rb);
       if (pa !== pb) return pa - pb;
@@ -329,6 +331,20 @@ export default function Dashboard() {
         </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            onClick={() => nav("/create")}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "none",
+              background: "#111827",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            + Create Job
+          </button>
+
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}

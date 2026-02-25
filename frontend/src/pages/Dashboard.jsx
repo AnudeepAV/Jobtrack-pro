@@ -702,6 +702,42 @@ export default function Dashboard() {
               >
                 {saving ? "Saving..." : "Save changes"}
               </button>
+
+              <button
+  onClick={async () => {
+    try {
+      const res = await api.post("/extension/link-token/");
+      const token = res?.data?.token;
+
+      if (!token) {
+        alert("Failed to generate token");
+        return;
+      }
+
+      window.open(
+        `https://www.linkedin.com/?jobtrack_link_token=${token}`,
+        "_blank"
+      );
+
+      alert("Now open the extension popup and click CONNECT.");
+    } catch {
+      alert("Error connecting extension");
+    }
+  }}
+  style={{
+    padding: "10px 14px",
+    borderRadius: 10,
+    border: "1px solid #e5e7eb",
+    background: "#2563eb",
+    color: "white",
+    cursor: "pointer",
+  }}
+>
+  Connect Extension
+</button>
+
+
+
             </div>
           </div>
         </div>

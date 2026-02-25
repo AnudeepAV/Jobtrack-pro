@@ -7,6 +7,15 @@ from rest_framework.permissions import AllowAny
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from extension_api.views import (
+    create_extension_link_token,
+    exchange_extension_link_token
+)
+
+urlpatterns += [
+    path("api/extension/link-token/", create_extension_link_token),
+    path("api/extension/exchange-token/", exchange_extension_link_token),
+]
 
 
 @api_view(["GET"])

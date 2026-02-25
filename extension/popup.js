@@ -4,6 +4,7 @@
 const API_BASE = "https://jobtrack-pro-api.onrender.com/api";
 const LOGIN_URL = `${API_BASE}/auth/login/`;
 const REFRESH_URL = `${API_BASE}/auth/refresh/`;
+const connectBtn = document.getElementById("connectBtn");
 
 // Backend extension endpoint
 const EXT_SAVE_URL = `${API_BASE}/extension/jobs/`;
@@ -18,6 +19,38 @@ const statusSelect = document.getElementById("status");
 const saveBtn = document.getElementById("saveBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const msg = document.getElementById("msg");
+
+connectBtn.addEventListener("click", async () => {
+  setMsg("Waiting for link token…", "muted");
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const url = tab?.url || "";
+
+  const match = url.match(/jobtrack_link_token=([^&]+)/);
+
+  if (!match) {
+    setMsg("Open the page after clicking Connect Extension.", "err");
+    return;
+  }
+
+  const linkToken = decodeURIComponent(match[1]);
+
+  const res = await fetch(`${API_BASE}/extension/exchange-token/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: linkToken }),
+  });
+
+  const { json, text } = await safeReadJson(res);
+
+  if (!res.ok || !json?.access || !json?.refresh) {
+    setMsg(`Failed to connect (${res.status}).`, "err");
+    return;
+  }
+
+  await setStoredAuth(json.access, json.refresh);
+  setMsg("Connected ✅ Extension ready.", "ok");
+});
 
 function setMsg(text, cls = "muted") {
   msg.className = `msg ${cls}`;

@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import api, { clearTokens } from "../lib/api";
 
 function daysSince(dateStr) {
@@ -40,6 +39,7 @@ function classifyFollowUp(followUpDateStr) {
   if (Number.isNaN(f.getTime())) return "none";
 
   const diffDays = Math.floor((f - today) / (1000 * 60 * 60 * 24));
+
   if (diffDays < 0) return "overdue";
   if (diffDays <= 3) return "due_soon";
   return "later";
@@ -47,6 +47,7 @@ function classifyFollowUp(followUpDateStr) {
 
 function FollowUpBadge({ followUpDate }) {
   const cls = classifyFollowUp(followUpDate);
+
   if (cls === "none") return null;
 
   const base = {
@@ -64,7 +65,14 @@ function FollowUpBadge({ followUpDate }) {
 
   if (cls === "overdue") {
     return (
-      <span style={{ ...base, background: "#fff1f2", border: "1px solid #fecaca", color: "#991b1b" }}>
+      <span
+        style={{
+          ...base,
+          background: "#fff1f2",
+          border: "1px solid #fecaca",
+          color: "#991b1b",
+        }}
+      >
         ⛔ Overdue
       </span>
     );
@@ -72,7 +80,14 @@ function FollowUpBadge({ followUpDate }) {
 
   if (cls === "due_soon") {
     return (
-      <span style={{ ...base, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e" }}>
+      <span
+        style={{
+          ...base,
+          background: "#fffbeb",
+          border: "1px solid #fde68a",
+          color: "#92400e",
+        }}
+      >
         ⚠️ Due soon
       </span>
     );
@@ -82,8 +97,6 @@ function FollowUpBadge({ followUpDate }) {
 }
 
 export default function Dashboard() {
-  const nav = useNavigate();
-
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -98,9 +111,6 @@ export default function Dashboard() {
   const [editingJob, setEditingJob] = useState(null);
   const [saving, setSaving] = useState(false);
   const [editErr, setEditErr] = useState("");
-
-  // Delete state
-  const [deletingId, setDeletingId] = useState(null);
 
   const JOBS_LIST_PATH = import.meta.env.VITE_JOBS_LIST_PATH || "/jobs/";
   const jobDetailPath = (id) => `/jobs/${id}/`;
@@ -119,6 +129,10 @@ export default function Dashboard() {
 
       const res = await api.get(JOBS_LIST_PATH);
       const payload = res?.data;
+
+      // Support both:
+      // 1) DRF list: [{...}]
+      // 2) paginated: { results: [...] }
       const items = Array.isArray(payload) ? payload : payload?.results || [];
 
       setJobs(items);
@@ -132,9 +146,7 @@ export default function Dashboard() {
         return;
       }
 
-      if (!silent) {
-        setErr(e?.response?.data?.detail || e?.message || "Failed to load jobs.");
-      }
+      if (!silent) setErr(e?.message || "Failed to load jobs.");
     } finally {
       if (!silent) setLoading(false);
     }
@@ -148,7 +160,6 @@ export default function Dashboard() {
     }, 10000);
 
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filteredJobs = useMemo(() => {
@@ -178,11 +189,16 @@ export default function Dashboard() {
       });
     }
 
+    // Sorting priority:
+    // 1) overdue first
+    // 2) due soon
+    // 3) latest applied
     list = [...list].sort((a, b) => {
       const ra = classifyFollowUp(a.follow_up_date);
       const rb = classifyFollowUp(b.follow_up_date);
 
       const rank = (r) => (r === "overdue" ? 0 : r === "due_soon" ? 1 : r === "later" ? 2 : 3);
+
       const pa = rank(ra);
       const pb = rank(rb);
       if (pa !== pb) return pa - pb;
@@ -248,55 +264,47 @@ export default function Dashboard() {
         window.location.href = "/login";
         return;
       }
-
-      setEditErr(e?.response?.data?.detail || e?.message || "Failed to save changes.");
+      setEditErr(e?.message || "Failed to save changes.");
     } finally {
       setSaving(false);
     }
   }
 
-  async function deleteJob(job) {
-    if (!job?.id) {
-      alert("This job has no id, cannot delete.");
-      return;
-    }
-
-    const ok = window.confirm(`Delete this job?\n\n${job.company_name} — ${job.job_title}`);
-    if (!ok) return;
-
-    setDeletingId(job.id);
-    setErr("");
-
+  async function connectExtension() {
     try {
-      await api.delete(jobDetailPath(job.id));
-      setJobs((prev) => prev.filter((j) => j.id !== job.id));
-      setLastUpdated(new Date());
-    } catch (e) {
-      const status = e?.response?.status ?? e?.status;
+      const res = await api.post("/extension/link-token/");
+      const token = res?.data?.token;
 
-      if (status === 401) {
-        clearTokens();
-        window.location.href = "/login";
+      if (!token) {
+        alert("Failed to create extension link token.");
         return;
       }
 
-      setErr(e?.response?.data?.detail || e?.message || "Failed to delete job.");
-    } finally {
-      setDeletingId(null);
+      // Open LinkedIn with token in query param. Extension will read it.
+      window.open(
+        `https://www.linkedin.com/?jobtrack_link_token=${encodeURIComponent(token)}`,
+        "_blank"
+      );
+
+      alert("LinkedIn opened. Now open your Chrome Extension and click Connect Extension.");
+    } catch (e) {
+      alert("Failed to connect extension. Make sure you are logged in.");
     }
   }
 
   const stats = useMemo(() => {
     let overdue = 0;
     let dueSoon = 0;
+    let none = 0;
 
     for (const j of jobs) {
       const cls = classifyFollowUp(j.follow_up_date);
       if (cls === "overdue") overdue += 1;
       else if (cls === "due_soon") dueSoon += 1;
+      else if (cls === "none") none += 1;
     }
 
-    return { overdue, dueSoon, total: jobs.length };
+    return { overdue, dueSoon, none, total: jobs.length };
   }, [jobs]);
 
   return (
@@ -331,20 +339,6 @@ export default function Dashboard() {
         </div>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <button
-            onClick={() => nav("/create")}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "none",
-              background: "#111827",
-              color: "white",
-              cursor: "pointer",
-            }}
-          >
-            + Create Job
-          </button>
-
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -409,6 +403,20 @@ export default function Dashboard() {
           </button>
 
           <button
+            onClick={connectExtension}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "1px solid #1d4ed8",
+              background: "#2563eb",
+              color: "white",
+              cursor: "pointer",
+            }}
+          >
+            Connect Extension
+          </button>
+
+          <button
             onClick={logout}
             style={{
               padding: "10px 14px",
@@ -453,10 +461,8 @@ export default function Dashboard() {
                 <th style={{ padding: 12 }}>Days</th>
                 <th style={{ padding: 12 }}>Link</th>
                 <th style={{ padding: 12 }}>Edit</th>
-                <th style={{ padding: 12 }}>Delete</th>
               </tr>
             </thead>
-
             <tbody>
               {filteredJobs.map((j) => (
                 <tr key={j.id || j.job_url} style={{ borderTop: "1px solid #f3f4f6" }}>
@@ -492,32 +498,13 @@ export default function Dashboard() {
                       Edit
                     </button>
                   </td>
-                  <td style={{ padding: 12 }}>
-                    <button
-                      onClick={() => deleteJob(j)}
-                      disabled={deletingId === j.id}
-                      style={{
-                        padding: "8px 10px",
-                        borderRadius: 10,
-                        border: "1px solid #fecaca",
-                        background: "#fff1f2",
-                        color: "#991b1b",
-                        cursor: deletingId === j.id ? "not-allowed" : "pointer",
-                        opacity: deletingId === j.id ? 0.6 : 1,
-                      }}
-                    >
-                      {deletingId === j.id ? "Deleting..." : "Delete"}
-                    </button>
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
 
-          {loading ? <div style={{ padding: 12, color: "#6b7280", fontSize: 13 }}>Loading...</div> : null}
-
-          {!loading && filteredJobs.length === 0 ? (
-            <div style={{ padding: 12, color: "#6b7280", fontSize: 13 }}>No jobs found.</div>
+          {loading ? (
+            <div style={{ padding: 12, color: "#6b7280", fontSize: 13 }}>Loading...</div>
           ) : null}
         </div>
       </div>
@@ -702,42 +689,6 @@ export default function Dashboard() {
               >
                 {saving ? "Saving..." : "Save changes"}
               </button>
-
-              <button
-  onClick={async () => {
-    try {
-      const res = await api.post("/extension/link-token/");
-      const token = res?.data?.token;
-
-      if (!token) {
-        alert("Failed to generate token");
-        return;
-      }
-
-      window.open(
-        `https://www.linkedin.com/?jobtrack_link_token=${token}`,
-        "_blank"
-      );
-
-      alert("Now open the extension popup and click CONNECT.");
-    } catch {
-      alert("Error connecting extension");
-    }
-  }}
-  style={{
-    padding: "10px 14px",
-    borderRadius: 10,
-    border: "1px solid #e5e7eb",
-    background: "#2563eb",
-    color: "white",
-    cursor: "pointer",
-  }}
->
-  Connect Extension
-</button>
-
-
-
             </div>
           </div>
         </div>

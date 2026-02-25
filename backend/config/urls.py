@@ -1,25 +1,14 @@
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import include, path
 
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
-from extension_api.views import (
-    create_extension_link_token,
-    exchange_extension_link_token
-)
-
-urlpatterns += [
-    path("api/extension/link-token/", create_extension_link_token),
-    path("api/extension/exchange-token/", exchange_extension_link_token),
-]
 
 
 @api_view(["GET"])
-@permission_classes([AllowAny])  # ✅ public health endpoint (no token needed)
 def health(request):
     return Response({"status": "ok"})
 
@@ -27,16 +16,18 @@ def health(request):
 urlpatterns = [
     path("admin/", admin.site.urls),
 
+    # Auth
     path("api/auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
 
+    # Health
     path("api/health/", health),
 
-    # App APIs
+    # Your apps
     path("api/", include("extension_api.urls")),
     path("api/", include("jobs.urls")),
 
-    # Swagger / OpenAPI
+    # API Docs
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
 ]

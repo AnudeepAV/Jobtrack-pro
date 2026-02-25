@@ -1,7 +1,11 @@
+// popup.js (production, no token UI)
+
 // ======== CONFIG ========
 const API_BASE = "https://jobtrack-pro-api.onrender.com/api";
 const LOGIN_URL = `${API_BASE}/auth/login/`;
 const REFRESH_URL = `${API_BASE}/auth/refresh/`;
+
+// Backend extension endpoint
 const EXT_SAVE_URL = `${API_BASE}/extension/jobs/`;
 
 // ======== UI ========
@@ -68,7 +72,7 @@ async function login(username, password) {
   const res = await fetch(LOGIN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username, password }),
+    body: JSON.stringify({ username, password })
   });
 
   const { text, json } = await safeReadJson(res);
@@ -77,7 +81,7 @@ async function login(username, password) {
     const err =
       json?.detail ||
       json?.message ||
-      `Login failed (${res.status}). ${text.slice(0, 160)}`;
+      `Login failed (${res.status}). ${text.slice(0, 180)}`;
     throw new Error(err);
   }
 
@@ -89,7 +93,7 @@ async function refreshAccessToken(refreshToken) {
   const res = await fetch(REFRESH_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh: refreshToken }),
+    body: JSON.stringify({ refresh: refreshToken })
   });
 
   const { text, json } = await safeReadJson(res);
@@ -98,7 +102,7 @@ async function refreshAccessToken(refreshToken) {
     const err =
       json?.detail ||
       json?.message ||
-      `Refresh failed (${res.status}). ${text.slice(0, 160)}`;
+      `Session refresh failed (${res.status}). ${text.slice(0, 180)}`;
     throw new Error(err);
   }
 
@@ -116,36 +120,20 @@ async function ensureContentScript(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ["content.js"],
+      files: ["content.js"]
     });
-  } catch (_) {
-    // ignore (it might already be injected)
-  }
+  } catch (_) {}
 }
 
 async function requestJobData(tabId) {
   return chrome.tabs.sendMessage(tabId, { type: "GET_JOB_DATA" });
 }
 
-// retry because LinkedIn page loads slowly
-async function getJobDataWithRetry(tabId, tries = 10) {
+async function getJobDataWithRetry(tabId, tries = 8) {
   for (let i = 0; i < tries; i++) {
-    let job = null;
-    try {
-      job = await requestJobData(tabId);
-    } catch (_) {
-      job = null;
-    }
-
-    const ok =
-      job?.job_url &&
-      job?.job_url.includes("linkedin.com/jobs") &&
-      job?.job_title &&
-      job?.company_name;
-
-    if (ok) return job;
-
-    await sleep(650);
+    const job = await requestJobData(tabId);
+    if (job?.job_url && job?.job_title && job?.company_name) return job;
+    await sleep(600);
   }
   return null;
 }
@@ -160,16 +148,16 @@ async function saveJob(token, job) {
     location_type: "remote",
     status: statusSelect.value,
     referral: false,
-    notes: "Saved via Chrome extension",
+    notes: "Saved via Chrome extension"
   };
 
   const res = await fetch(EXT_SAVE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${token}`
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(payload)
   });
 
   const { text, json } = await safeReadJson(res);
@@ -180,7 +168,6 @@ async function saveJob(token, job) {
 (async function init() {
   const stored = await getStoredAuth();
 
-  // load saved status
   if (stored.jobtrack_status) statusSelect.value = stored.jobtrack_status;
   statusSelect.addEventListener("change", () => {
     chrome.storage.local.set({ jobtrack_status: statusSelect.value });
@@ -188,10 +175,10 @@ async function saveJob(token, job) {
 
   if (!stored.jobtrack_refresh) {
     loginBox.style.display = "block";
-    setMsg("Please sign in once to enable saving.", "muted");
+    setMsg("Sign in once to enable saving jobs.", "muted");
   } else {
     loginBox.style.display = "none";
-    setMsg("Ready. Open a LinkedIn job and click Save.", "muted");
+    setMsg("Ready ✅ Open a LinkedIn job and click Save.", "muted");
   }
 })();
 
@@ -203,6 +190,7 @@ loginBtn.addEventListener("click", async () => {
   try {
     const u = usernameInput.value.trim();
     const p = passwordInput.value;
+
     if (!u || !p) {
       setMsg("Enter username + password.", "err");
       return;
@@ -214,7 +202,7 @@ loginBtn.addEventListener("click", async () => {
     usernameInput.value = "";
     passwordInput.value = "";
     loginBox.style.display = "none";
-    setMsg("Signed in ✅ You can save jobs now.", "ok");
+    setMsg("Signed in ✅ Now you can save jobs.", "ok");
   } catch (e) {
     setMsg(e?.message || "Login failed.", "err");
   } finally {
@@ -249,12 +237,6 @@ saveBtn.addEventListener("click", async () => {
       return;
     }
 
-    // must be on LinkedIn jobs page
-    if (!tab.url || !tab.url.includes("linkedin.com/jobs")) {
-      setMsg("Open a LinkedIn Jobs page first.", "err");
-      return;
-    }
-
     await ensureContentScript(tab.id);
 
     setMsg("Reading job details…", "muted");
@@ -262,23 +244,23 @@ saveBtn.addEventListener("click", async () => {
 
     if (!job) {
       setMsg(
-        "Could not read job title/company. Click inside the job details area, scroll slightly, wait 2 seconds, and try again.",
+        "Could not read job title/company. Scroll a bit, wait 2 seconds, and try again.",
         "err"
       );
       return;
     }
 
     if (!job.job_url.includes("/jobs/view/")) {
-      setMsg("Open an actual job page (URL must contain /jobs/view/123…).", "err");
+      setMsg("Open a job page (URL must contain /jobs/view/123…).", "err");
       return;
     }
 
-    setMsg(`Saving: ${job.company_name} — ${job.job_title}`, "muted");
+    setMsg("Saving…", "muted");
 
-    // attempt 1
+    // Attempt 1
     let result = await saveJob(access, job);
 
-    // if unauthorized, refresh and retry once
+    // Refresh on 401 and retry once
     if (result.res.status === 401) {
       setMsg("Refreshing session…", "muted");
       access = await refreshAccessToken(refresh);
@@ -289,7 +271,7 @@ saveBtn.addEventListener("click", async () => {
       const errorMsg =
         result.json?.detail ||
         result.json?.message ||
-        `Request failed (${result.res.status}). ${result.text.slice(0, 160)}`;
+        `Request failed (${result.res.status}). ${result.text.slice(0, 180)}`;
       setMsg(errorMsg, "err");
       return;
     }

@@ -1,13 +1,11 @@
-// content.js (LinkedIn job scraper - very robust)
+// content.js (robust LinkedIn job scraper)
 
 function clean(s) {
   return (s || "").replace(/\s+/g, " ").trim();
 }
+
 function textOf(el) {
   return clean(el?.textContent);
-}
-function attrOf(el, attr) {
-  return clean(el?.getAttribute?.(attr) || "");
 }
 
 function firstTextFromSelectors(selectors, root = document) {
@@ -22,37 +20,50 @@ function firstTextFromSelectors(selectors, root = document) {
 function getMeta(nameOrProp) {
   const byName = document.querySelector(`meta[name="${nameOrProp}"]`);
   const byProp = document.querySelector(`meta[property="${nameOrProp}"]`);
-  return clean(byName?.getAttribute("content") || byProp?.getAttribute("content") || "");
+  return clean(
+    byName?.getAttribute("content") || byProp?.getAttribute("content") || ""
+  );
 }
 
 function getJobUrl() {
   return window.location.href.split("?")[0];
 }
 
+function getTitleFallback() {
+  const t = clean(document.title);
+  if (!t) return "";
+  return t.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
+}
+
 function getJobTitle() {
-  // Primary LinkedIn selectors
   const title = firstTextFromSelectors([
-    // Unified job details top card
     ".job-details-jobs-unified-top-card__job-title h1",
     ".job-details-jobs-unified-top-card__job-title",
-    // Other variants
     ".jobs-unified-top-card__job-title h1",
     ".jobs-unified-top-card__job-title",
-    // Sometimes this exists
-    "h1.t-24.t-bold.inline",
+    "main h1",
     "h1",
-    // Data-test
     "[data-test-job-title]"
   ]);
 
   if (title) return title;
 
-  // Fallbacks
   const ogTitle = getMeta("og:title");
-  if (ogTitle) return ogTitle.replace(/\s*\|\s*LinkedIn\s*$/i, "").trim();
+  if (ogTitle) return ogTitle;
 
-  const dt = clean(document.title).replace(/\s*\|\s*LinkedIn\s*$/i, "");
-  return dt;
+  return getTitleFallback();
+}
+
+function getCompanyFromCompanyLinkNearTitle() {
+  const main = document.querySelector("main") || document;
+
+  const companyLink =
+    main.querySelector('.job-details-jobs-unified-top-card__company-name a[href*="/company/"]') ||
+    main.querySelector('.jobs-unified-top-card__company-name a[href*="/company/"]') ||
+    main.querySelector('a[href*="/company/"][data-control-name]') ||
+    main.querySelector('a[href*="/company/"]');
+
+  return textOf(companyLink);
 }
 
 function getCompanyName() {
@@ -61,73 +72,54 @@ function getCompanyName() {
     ".job-details-jobs-unified-top-card__company-name",
     ".jobs-unified-top-card__company-name a",
     ".jobs-unified-top-card__company-name",
-    "a[href*='/company/'] span",
-    "a[href*='/company/']",
     "[data-test-job-company-name]"
   ]);
 
   if (company) return company;
 
-  // Fallback: try aria-label on company link
-  const companyLink = document.querySelector("a[href*='/company/']");
-  const aria = attrOf(companyLink, "aria-label");
-  if (aria) return aria;
+  const company2 = getCompanyFromCompanyLinkNearTitle();
+  if (company2) return company2;
 
-  // Fallback: parse og:description pattern: "Company · Location · ..."
   const ogDesc = getMeta("og:description");
   if (ogDesc && ogDesc.includes("·")) {
     const firstPart = clean(ogDesc.split("·")[0]);
-    if (firstPart && firstPart.length <= 80) return firstPart;
+    if (firstPart && firstPart.length <= 60) return firstPart;
   }
 
   return "";
 }
 
-/**
- * Sometimes LinkedIn doesn't render job title/company in DOM immediately.
- * We also try to read it from JSON-LD if present.
- */
-function tryJsonLd() {
-  try {
-    const scripts = Array.from(document.querySelectorAll("script[type='application/ld+json']"));
-    for (const s of scripts) {
-      const raw = s.textContent;
-      if (!raw) continue;
-      const obj = JSON.parse(raw);
-
-      // LinkedIn may have arrays
-      const list = Array.isArray(obj) ? obj : [obj];
-
-      for (const item of list) {
-        const title = clean(item?.title || item?.name);
-        const company = clean(item?.hiringOrganization?.name);
-        if (title || company) {
-          return { title, company };
-        }
-      }
-    }
-  } catch (_) {}
-  return { title: "", company: "" };
+function waitFor(ms) {
+  return new Promise((r) => setTimeout(r, ms));
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === "GET_JOB_DATA") {
-    let job_title = getJobTitle();
-    let company_name = getCompanyName();
+    (async () => {
+      // LinkedIn loads DOM late — retry a few times
+      for (let i = 0; i < 3; i++) {
+        const data = {
+          job_url: getJobUrl(),
+          job_title: getJobTitle(),
+          company_name: getCompanyName()
+        };
 
-    // JSON-LD fallback
-    if (!job_title || !company_name) {
-      const ld = tryJsonLd();
-      if (!job_title) job_title = ld.title || job_title;
-      if (!company_name) company_name = ld.company || company_name;
-    }
+        if (data.job_title && data.company_name) {
+          sendResponse(data);
+          return;
+        }
 
-    const data = {
-      job_url: getJobUrl(),
-      job_title,
-      company_name
-    };
+        await waitFor(500);
+      }
 
-    sendResponse(data);
+      // last attempt response
+      sendResponse({
+        job_url: getJobUrl(),
+        job_title: getJobTitle(),
+        company_name: getCompanyName()
+      });
+    })();
+
+    return true; // ✅ IMPORTANT (keeps channel open for async)
   }
 });

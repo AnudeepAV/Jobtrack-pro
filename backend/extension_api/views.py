@@ -1,49 +1,45 @@
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.contrib.auth import get_user_model
-from rest_framework_simplejwt.tokens import RefreshToken
-import secrets
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
 
-User = get_user_model()
-
-
-# ---------------------------------------------
-# Generate one-time extension link token
-# ---------------------------------------------
-@api_view(["POST"])
-@permission_classes([IsAuthenticated])
-def create_extension_link_token(request):
-    token = secrets.token_urlsafe(32)
-
-    request.user.extension_link_token = token
-    request.user.save(update_fields=["extension_link_token"])
-
-    return Response({"token": token})
+from jobs.models import JobApplication
+from jobs.serializers import JobApplicationSerializer
 
 
-# ---------------------------------------------
-# Exchange link token for JWT tokens
-# ---------------------------------------------
-@api_view(["POST"])
-def exchange_extension_link_token(request):
-    token = request.data.get("token")
+class ExtensionJobIngestView(APIView):
+    permission_classes = [IsAuthenticated]
 
-    if not token:
-        return Response({"detail": "token required"}, status=400)
+    def post(self, request):
+        job_url = (request.data.get("job_url") or "").strip()
+        job_title = (request.data.get("job_title") or "").strip()
+        company_name = (request.data.get("company_name") or "").strip()
 
-    user = User.objects.filter(extension_link_token=token).first()
+        if not job_url:
+            return Response({"detail": "job_url is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-    if not user:
-        return Response({"detail": "invalid token"}, status=401)
+        if not job_title:
+            return Response({"job_title": ["This field may not be blank."]}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Clear token after use
-    user.extension_link_token = ""
-    user.save(update_fields=["extension_link_token"])
+        if not company_name:
+            return Response({"company_name": ["This field may not be blank."]}, status=status.HTTP_400_BAD_REQUEST)
 
-    refresh = RefreshToken.for_user(user)
+        defaults = {
+            "job_title": job_title,
+            "company_name": company_name,
+            "location_type": request.data.get("location_type", "remote"),
+            "status": request.data.get("status", "applied"),
+            "referral": bool(request.data.get("referral", False)),
+            "notes": request.data.get("notes", ""),
+        }
 
-    return Response({
-        "refresh": str(refresh),
-        "access": str(refresh.access_token)
-    })
+        obj, created = JobApplication.objects.update_or_create(
+            user=request.user,
+            job_url=job_url,
+            defaults=defaults,
+        )
+
+        data = JobApplicationSerializer(obj).data
+        data["created"] = created
+
+        return Response(data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
